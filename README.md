@@ -60,13 +60,25 @@ Also:
 
 ## Install
 
-From source (needs Rust):
+Download the archive for your system from the
+[latest release](https://github.com/mimobn/hotbar/releases/latest), unpack it
+and put `hotbar` (and `hotbarw` on Windows) somewhere on your PATH:
+
+| System                         | File                             |
+|--------------------------------|----------------------------------|
+| Linux, Intel/AMD               | `hotbar-linux-x86_64.tar.gz`     |
+| Linux, ARM (Raspberry Pi 4/5)  | `hotbar-linux-arm64.tar.gz`      |
+| macOS, Apple Silicon and Intel | `hotbar-macos-universal.tar.gz`  |
+| Windows 10/11                  | `hotbar-windows-x86_64.zip`      |
+
+`SHA256SUMS` in the same release lets you check the download:
+`sha256sum -c SHA256SUMS --ignore-missing`.
+
+Or build from source (needs Rust):
 
 ```sh
 cargo install --git https://github.com/mimobn/hotbar
 ```
-
-Release builds for all three platforms are attached to each GitHub release.
 
 ### Linux
 

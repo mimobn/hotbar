@@ -2,3 +2,5 @@
 .claude/
 *.log
 /docs/assets/.demo/
+/out/
+/stage/

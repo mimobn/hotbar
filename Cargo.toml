@@ -1,6 +1,6 @@
 [package]
 name = "hotbar"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Numbered clipboard slots and clipboard history for Windows, Linux and macOS"
 license = "MIT"
