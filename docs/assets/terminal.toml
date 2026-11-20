@@ -1,0 +1,35 @@
+# Real hotbar commands against the demo history made by make-visuals.ps1.
+kind = "terminal"
+out = "terminal.gif"
+still = "terminal.png"
+title = "hotbar from the command line"
+prompt = "~"
+cols = 80
+type_ms = 32
+line_ms = 90
+end_ms = 3500
+
+[[highlight]]
+regex = '^\s*(\d+)  '
+colors = ["cyan"]
+
+[[highlight]]
+regex = '(\[image [^\]]*\])'
+colors = ["magenta"]
+
+[[step]]
+cmd = 'hotbar set 1 "ssh deploy@10.0.0.12 -p 2222"'
+pause_ms = 250
+
+[[step]]
+cmd = "hotbar slots"
+replace = [["\t", "  "]]
+pause_ms = 900
+
+[[step]]
+cmd = "hotbar get 1"
+pause_ms = 700
+
+[[step]]
+cmd = "hotbar list --limit 6"
+replace = [["\t", "  "]]

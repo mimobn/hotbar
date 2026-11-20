@@ -1,0 +1,8 @@
+# The real picker window, rendered by `hotbar pick --snapshot` in three states.
+kind = "slides"
+out = "picker.gif"
+images = ["picker-slots.png", "picker-search.png", "picker-image.png"]
+width = 800
+hold_ms = 2600
+fade_ms = 400
+background = [13, 17, 23]

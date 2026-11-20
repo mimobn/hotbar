@@ -125,20 +125,37 @@ fn user() -> String {
         .collect()
 }
 
+/// `HOTBAR_INSTANCE=name` runs a separate daemon with its own socket, so a
+/// test or demo setup (usually with `HOTBAR_DATA` too) never talks to yours.
+fn instance() -> String {
+    std::env::var("HOTBAR_INSTANCE")
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect()
+}
+
+fn suffix() -> String {
+    match instance() {
+        i if i.is_empty() => String::new(),
+        i => format!("-{i}"),
+    }
+}
+
 #[cfg(windows)]
 fn name() -> Result<Name<'static>> {
     use interprocess::local_socket::GenericNamespaced;
-    Ok(format!("hotbar-{}", user()).to_ns_name::<GenericNamespaced>()?)
+    Ok(format!("hotbar-{}{}", user(), suffix()).to_ns_name::<GenericNamespaced>()?)
 }
 
 #[cfg(unix)]
 pub fn socket_path() -> std::path::PathBuf {
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
-        return std::path::PathBuf::from(dir).join("hotbar.sock");
+        return std::path::PathBuf::from(dir).join(format!("hotbar{}.sock", suffix()));
     }
     // SAFETY: getuid never fails.
     let uid = unsafe { libc::getuid() };
-    std::env::temp_dir().join(format!("hotbar-{uid}-{}.sock", user()))
+    std::env::temp_dir().join(format!("hotbar-{uid}-{}{}.sock", user(), suffix()))
 }
 
 #[cfg(unix)]

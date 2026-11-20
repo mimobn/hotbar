@@ -3,6 +3,8 @@
 Nine numbered clipboard slots on top of your normal clipboard, plus clipboard
 history. One small binary for Linux (Wayland and X11), Windows and macOS.
 
+<p align="center"><img src="docs/assets/picker-slots.png" width="720" alt="The hotbar picker: a row of nine slot cards (six filled, one holding an image thumbnail, three empty) above a searchable clipboard history"></p>
+
 ```
 Ctrl+C          copy, like always
 Ctrl+C then 1   copy, and also keep it in slot 1
@@ -148,7 +150,9 @@ at login (it uses `hotbarw.exe`, which has no console window).
 
 Ctrl+Alt+V opens hotbar's picker. Win+V stays the Windows clipboard, so both
 work side by side. Saving to a slot, or pasting an empty one, shows a small
-popup near the bottom of the screen that never takes focus.
+popup near the bottom of the screen that never takes focus:
+
+<p align="center"><img src="docs/assets/popup.png" width="420" alt="Popup reading: Slot 1, ssh deploy@10.0.0.12 -p 2222"></p>
 
 ### macOS
 
@@ -167,7 +171,10 @@ hotbar autostart on   # LaunchAgent
 
 The top row is your hotbar: the nine slots, filled or empty, with a
 thumbnail for images. Click a slot to paste it. History is listed below, and
-entries held in a slot show its number.
+entries held in a slot show its number. While you search, slots that don't
+match fade out.
+
+<p align="center"><img src="docs/assets/picker.gif" width="720" alt="The picker in three states: the slot row with history, a search for git narrowing the list, and an image entry selected"></p>
 
 | Key            | Does                                          |
 |----------------|-----------------------------------------------|
@@ -180,6 +187,8 @@ entries held in a slot show its number.
 | Esc            | close                                         |
 
 ## Commands
+
+<p align="center"><img src="docs/assets/terminal.gif" width="720" alt="Terminal: hotbar set 1 fills a slot, hotbar slots lists all nine, hotbar get 1 prints it, hotbar list shows recent history with ids"></p>
 
 ```
 hotbar daemon            run in the background
@@ -289,6 +298,13 @@ cargo test
 
 Linux builds need no system libraries: the Wayland, X11 and evdev code is pure
 Rust.
+
+The README images come from the real program, using demo data and never
+your own history: `powershell -File docs/assets/make-visuals.ps1` renders the
+picker off screen with `hotbar pick --snapshot`, captures the popup window,
+and runs the commands in [docs/assets/terminal.toml](docs/assets/terminal.toml)
+through `readme_gifs.py` (needs [uv](https://docs.astral.sh/uv/)). The
+terminal recording replays real output; the typing pace is staged.
 
 ## License
 

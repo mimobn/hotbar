@@ -423,6 +423,49 @@ impl Daemon {
     }
 }
 
+impl Daemon {
+    /// The first time hotbar runs, say how to use it.
+    fn welcome(&self) {
+        let marker = config::data_dir().join(".welcomed");
+        if marker.exists() || !self.inj.hooked() {
+            return;
+        }
+        let cfg = self.cfg();
+        let m = if cfg!(target_os = "macos") {
+            "Cmd"
+        } else {
+            "Ctrl"
+        };
+        let mut body = format!("{m}+C then 1 saves to slot 1    {m}+V then 1 pastes it");
+        if !cfg.keys.picker.trim().is_empty() {
+            body.push_str(&format!(
+                "    {} shows your slots",
+                pretty_hotkey(&cfg.keys.picker)
+            ));
+        }
+        system::notify("hotbar is on", &body);
+        let _ = std::fs::write(marker, b"");
+    }
+}
+
+/// "ctrl+alt+v" to "Ctrl+Alt+V".
+pub fn pretty_hotkey(s: &str) -> String {
+    s.split('+')
+        .map(|p| {
+            let p = p.trim();
+            if p.chars().count() == 1 {
+                p.to_uppercase()
+            } else {
+                let mut c = p.chars();
+                c.next()
+                    .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                    .unwrap_or_default()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
 /// The leading number of a "id<TAB>preview" line.
 pub fn parse_id(line: &str) -> Option<u64> {
     line.trim().split(['\t', ' ']).next()?.parse().ok()
@@ -433,6 +476,8 @@ pub fn run() -> Result<()> {
         bail!("hotbar daemon is already running");
     }
     crate::logging::to_file();
+    #[cfg(windows)]
+    crate::osd::init_dpi();
     crate::log!("hotbar {} starting", crate::VERSION);
     let cfg = Config::load().unwrap_or_else(|e| {
         crate::log!("{e:#}; using the default config");
@@ -501,6 +546,7 @@ pub fn run() -> Result<()> {
             })?;
     }
     d.watch_config();
+    d.welcome();
 
     let handler_d = d.clone();
     ipc::serve(Arc::new(move |req| handler_d.handle(req)))
@@ -509,6 +555,13 @@ pub fn run() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hotkey_names() {
+        assert_eq!(pretty_hotkey("ctrl+alt+v"), "Ctrl+Alt+V");
+        assert_eq!(pretty_hotkey("super+v"), "Super+V");
+        assert_eq!(pretty_hotkey("cmd+shift+v"), "Cmd+Shift+V");
+    }
 
     #[test]
     fn ids_from_menu_lines() {

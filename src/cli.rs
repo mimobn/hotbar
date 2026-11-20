@@ -86,6 +86,13 @@ enum Cmd {
         builtin: bool,
         #[arg(long, hide = true, default_value_t = 0)]
         return_to: isize,
+        /// Save the picker as a PNG and quit (used for documentation images).
+        #[arg(long, hide = true)]
+        snapshot: Option<std::path::PathBuf>,
+        #[arg(long, hide = true, default_value = "")]
+        query: String,
+        #[arg(long, hide = true, default_value_t = 0)]
+        select: usize,
     },
     /// Delete history. Slots are kept unless --slots is given.
     Wipe {
@@ -100,6 +107,9 @@ enum Cmd {
     },
     /// Check what works on this machine.
     Doctor,
+    /// Show a notification the way the daemon does (for testing and docs).
+    #[command(hide = true)]
+    Popup { text: String },
     /// Start hotbar at login, or stop doing so.
     Autostart {
         #[arg(value_parser = ["on", "off"])]
@@ -230,11 +240,19 @@ pub fn run() -> Result<()> {
             dmenu,
             builtin,
             return_to,
+            snapshot,
+            query,
+            select,
         } => {
             let cfg = Config::load().unwrap_or_default();
             let command = dmenu.unwrap_or(cfg.picker.command);
-            if builtin || command.trim() == "builtin" {
-                crate::picker::run_builtin(return_to)
+            let snapshot = snapshot.map(|path| crate::picker::Snapshot {
+                path,
+                query,
+                select,
+            });
+            if builtin || snapshot.is_some() || command.trim() == "builtin" {
+                crate::picker::run_builtin(return_to, snapshot)
             } else {
                 crate::picker::run_dmenu(&command)
             }
@@ -245,6 +263,17 @@ pub fn run() -> Result<()> {
         }
         Cmd::Setup { yes } => crate::system::setup(yes),
         Cmd::Doctor => crate::system::doctor(),
+        Cmd::Popup { text } => {
+            #[cfg(windows)]
+            crate::osd::init_dpi();
+            let (title, body) = text.split_once("   ").unwrap_or((text.as_str(), ""));
+            crate::system::notify(title, body);
+            // The popup lives in this process: keep it alive until it is gone.
+            std::thread::sleep(std::time::Duration::from_millis(
+                1400 + text.chars().count() as u64 * 45,
+            ));
+            Ok(())
+        }
         Cmd::Autostart { state } => {
             println!("{}", crate::system::autostart(state == "on")?);
             Ok(())

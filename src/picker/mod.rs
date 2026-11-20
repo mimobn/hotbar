@@ -10,18 +10,37 @@ use crate::store::EntryMeta;
 
 mod builtin;
 
-pub use builtin::run as run_builtin;
+pub use builtin::{run as run_builtin, Snapshot};
 
+/// Slots and history, from the daemon or (when none runs) straight from disk.
 pub fn fetch() -> Result<(Vec<SlotInfo>, Vec<EntryMeta>)> {
-    let slots = match ipc::send(&Request::Slots)?.into_result()? {
-        Response::Slots { slots } => slots,
-        _ => Vec::new(),
-    };
-    let entries = match ipc::send(&Request::List { limit: 0 })?.into_result()? {
-        Response::Entries { entries } => entries,
-        _ => Vec::new(),
-    };
-    Ok((slots, entries))
+    if ipc::daemon_running() {
+        let slots = match ipc::send(&Request::Slots)?.into_result()? {
+            Response::Slots { slots } => slots,
+            _ => Vec::new(),
+        };
+        let entries = match ipc::send(&Request::List { limit: 0 })?.into_result()? {
+            Response::Entries { entries } => entries,
+            _ => Vec::new(),
+        };
+        return Ok((slots, entries));
+    }
+    let store = crate::store::Store::open(&crate::config::data_dir())?;
+    let slots = store
+        .slots()
+        .into_iter()
+        .map(|(n, entry)| SlotInfo { n, entry })
+        .collect();
+    Ok((slots, store.list().to_vec()))
+}
+
+/// Raw bytes of an entry, from the daemon or from disk.
+pub fn entry_bytes(id: u64) -> Option<Vec<u8>> {
+    if let Ok(Response::Data { data, .. }) = ipc::send(&Request::Get { id }) {
+        return ipc::decode(&data).ok();
+    }
+    let store = crate::store::Store::open(&crate::config::data_dir()).ok()?;
+    store.get(id).ok().flatten().map(|c| c.bytes().to_vec())
 }
 
 /// Lines in cliphist style: "id<TAB>preview". Slots come first, tagged [n].

@@ -16,7 +16,7 @@ use eframe::egui::{self, Color32, Key, Modifiers, RichText, Sense, TextureHandle
 
 use crate::config::{parse_color, Config, Theme};
 use crate::content::Kind;
-use crate::ipc::{self, Request, Response, SlotInfo};
+use crate::ipc::{self, Request, SlotInfo};
 use crate::store::EntryMeta;
 
 pub const TITLE: &str = "hotbar picker";
@@ -76,9 +76,51 @@ struct App {
     focused_since: Option<std::time::Instant>,
     frames: u32,
     status: Option<String>,
+    snapshot: Option<Snapshot>,
+}
+
+/// Render the picker off screen, save it as a PNG and quit. Used to make
+/// the README images from the real window.
+#[derive(Clone, Debug, Default)]
+pub struct Snapshot {
+    pub path: std::path::PathBuf,
+    pub query: String,
+    pub select: usize,
 }
 
 impl App {
+    /// Snapshot mode: ask for a screenshot once things have drawn, save it, exit.
+    fn snapshot_frame(&mut self, ctx: &egui::Context) {
+        let Some(snap) = self.snapshot.clone() else {
+            return;
+        };
+        let shot = ctx.input(|i| {
+            i.raw.events.iter().find_map(|e| match e {
+                egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                _ => None,
+            })
+        });
+        if let Some(image) = shot {
+            let [w, h] = image.size;
+            let rgba: Vec<u8> = image
+                .pixels
+                .iter()
+                .flat_map(|c| c.to_srgba_unmultiplied())
+                .collect();
+            let code = match image::RgbaImage::from_raw(w as u32, h as u32, rgba)
+                .map(|img| img.save(&snap.path))
+            {
+                Some(Ok(())) => 0,
+                _ => 1,
+            };
+            std::process::exit(code);
+        }
+        if self.frames == 8 {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
+        }
+        ctx.request_repaint();
+    }
+
     /// History entries matching the search. Entries held in a slot carry its number.
     fn rows(&self) -> Vec<Row> {
         let q = self.query.to_lowercase();
@@ -115,7 +157,16 @@ impl App {
                     (false, true) => self.c.surface,
                     (false, false) => self.c.surface.gamma_multiply(0.6),
                 };
-                let painter = ui.painter_at(rect);
+                let mut painter = ui.painter_at(rect);
+                // While searching, fade the slots that do not match.
+                let q = self.query.to_lowercase();
+                let matches = q.is_empty()
+                    || s.entry
+                        .as_ref()
+                        .is_some_and(|m| m.preview.to_lowercase().contains(&q));
+                if !matches {
+                    painter.set_opacity(0.3);
+                }
                 painter.rect_filled(rect, self.radius * 0.6, fill);
                 if filled {
                     painter.rect_stroke(
@@ -203,10 +254,7 @@ impl App {
             return t.clone();
         }
         let tex = (|| {
-            let Ok(Response::Data { data, .. }) = ipc::send(&Request::Get { id }) else {
-                return None;
-            };
-            let bytes = ipc::decode(&data).ok()?;
+            let bytes = super::entry_bytes(id)?;
             let img = image::load_from_memory(&bytes)
                 .ok()?
                 .thumbnail(160, 48)
@@ -327,10 +375,13 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.frames += 1;
+        if self.snapshot.is_some() {
+            self.snapshot_frame(ctx);
+        }
         // Focus can bounce while the window appears. Keep asking for it until
         // we have held it for a moment; only after that does losing focus
-        // (clicking elsewhere) close the picker.
-        let focused = ctx.input(|i| i.viewport().focused) == Some(true);
+        // (clicking elsewhere) close the picker. Snapshots never take focus.
+        let focused = self.snapshot.is_some() || ctx.input(|i| i.viewport().focused) == Some(true);
         let settled = self
             .focused_since
             .is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(400));
@@ -472,32 +523,43 @@ impl eframe::App for App {
     }
 }
 
-pub fn run(return_to: isize) -> Result<()> {
+pub fn run(return_to: isize, snapshot: Option<Snapshot>) -> Result<()> {
     let cfg = Config::load().unwrap_or_default();
     let theme = cfg.theme.resolved();
     let (slots, entries) = super::fetch()?;
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title(TITLE)
+        .with_app_id("hotbar")
+        .with_inner_size([cfg.picker.width, cfg.picker.height])
+        .with_decorations(false)
+        .with_resizable(false)
+        .with_transparent(true)
+        .with_taskbar(false);
+    viewport = match &snapshot {
+        // Drawn far off screen and never focused, so it does not disturb anyone.
+        Some(_) => viewport
+            .with_position([-10_000.0, -10_000.0])
+            .with_active(false),
+        None => viewport.with_always_on_top(),
+    };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title(TITLE)
-            .with_app_id("hotbar")
-            .with_inner_size([cfg.picker.width, cfg.picker.height])
-            .with_decorations(false)
-            .with_resizable(false)
-            .with_always_on_top()
-            .with_transparent(true)
-            .with_taskbar(false),
-        centered: true,
+        viewport,
+        centered: snapshot.is_none(),
         ..Default::default()
     };
+    let (query, selected) = snapshot
+        .as_ref()
+        .map(|s| (s.query.clone(), s.select))
+        .unwrap_or_default();
     let font_size = theme.font_size;
     let app = App {
         c: Colors::from(&theme),
         radius: theme.radius,
         font_size,
-        query: String::new(),
+        query,
         slots,
         entries,
-        selected: 0,
+        selected,
         scroll_to_selected: false,
         thumbs: HashMap::new(),
         return_to,
@@ -505,6 +567,7 @@ pub fn run(return_to: isize) -> Result<()> {
         focused_since: None,
         frames: 0,
         status: None,
+        snapshot,
     };
     eframe::run_native(
         TITLE,
