@@ -195,10 +195,12 @@ pub fn run() -> Result<()> {
         }
         Cmd::Slots => {
             if let Response::Slots { slots } = request(Request::Slots)? {
+                let mut out = std::io::stdout().lock();
                 for s in slots {
-                    match s.entry {
-                        Some(m) => println!("{}\t{}", s.n, m.preview),
-                        None => println!("{}\t", s.n),
+                    let preview = s.entry.map(|m| m.preview).unwrap_or_default();
+                    // Stop quietly when the reader goes away (`hotbar slots | head`).
+                    if writeln!(out, "{}\t{}", s.n, preview).is_err() {
+                        break;
                     }
                 }
             }
