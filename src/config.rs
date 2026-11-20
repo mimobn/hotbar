@@ -63,17 +63,24 @@ pub struct Keys {
     pub numpad: bool,
 }
 
+/// Picker hotkey per platform. Windows keeps Win+V for its own clipboard.
+pub fn default_picker() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd+shift+v"
+    } else if cfg!(windows) {
+        "ctrl+alt+v"
+    } else {
+        "super+v"
+    }
+}
+
 impl Default for Keys {
     fn default() -> Self {
         Keys {
             chord: "ctrl-held".into(),
             timeout_ms: 300,
             primary: "auto".into(),
-            picker: if cfg!(target_os = "macos") {
-                "cmd+shift+v".into()
-            } else {
-                "super+v".into()
-            },
+            picker: default_picker().into(),
             copy_key: 'c',
             paste_key: 'v',
             numpad: true,

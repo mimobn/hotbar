@@ -8,7 +8,7 @@ Ctrl+C          copy, like always
 Ctrl+C then 1   copy, and also keep it in slot 1
 Ctrl+V          paste, like always
 Ctrl+V then 1   paste slot 1
-Super+V         history picker
+Super+V         history picker (Ctrl+Alt+V on Windows)
 ```
 
 Think of a game hotbar: you keep the things you paste all day (an email
@@ -146,8 +146,8 @@ command = "fuzzel --dmenu"
 Nothing to set up. Run `hotbar daemon`, or `hotbar autostart on` to start it
 at login (it uses `hotbarw.exe`, which has no console window).
 
-While hotbar runs, Win+V opens its picker instead of the Windows one. Set
-`picker = ""` under `[keys]` to keep the Windows picker.
+Ctrl+Alt+V opens hotbar's picker. Win+V stays the Windows clipboard, so both
+work side by side.
 
 ### macOS
 
@@ -161,7 +161,8 @@ hotbar autostart on   # LaunchAgent
 
 ## Picker
 
-`Super+V` (`Cmd+Shift+V` on macOS), or run `hotbar pick`.
+`Super+V` on Linux, `Ctrl+Alt+V` on Windows, `Cmd+Shift+V` on macOS, or run
+`hotbar pick`.
 
 | Key            | Does                                          |
 |----------------|-----------------------------------------------|
@@ -200,19 +201,43 @@ Slot and history commands also work when the daemon is not running.
 
 ## Config
 
-`hotbar config --init` writes the default file with every option commented:
-[packaging/config.toml](packaging/config.toml). The daemon reloads it when you
-save. Things you can change:
+You don't need a config file: the defaults work. To change something, run
+`hotbar config --init`. It writes a short file with the options people
+usually change ([packaging/config.toml](packaging/config.toml)), for example:
 
-- `history`: how many entries to keep, max age, min and max length, image size
-  limit, and whether to skip password manager copies (on by default)
-- `keys`: chord style, the primary modifier, the picker hotkey, the copy and
-  paste keys (Dvorak users on Linux want `paste_key = "."`), keypad digits
-- `paste`: restore the clipboard after a slot paste and how long to wait first,
-  notifications
-- `picker`: built-in window or a dmenu command, size
-- `theme`: colors, corner radius, font size, or `pywal = true` to take colors
-  from `~/.cache/wal/colors.json`
+```toml
+[keys]
+picker = "ctrl+alt+v"
+```
+
+The daemon reloads the file when you save it. Every other option is listed
+below; add only the ones you want.
+
+| Section     | Option              | Default       | Meaning |
+|-------------|---------------------|---------------|---------|
+| `[keys]`    | `chord`             | `"ctrl-held"` | `"ctrl-held"`, `"release"` or `"off"` |
+|             | `picker`            | per platform  | picker hotkey, `""` to turn it off |
+|             | `timeout_ms`        | `300`         | wait for the digit in release mode |
+|             | `primary`           | `"auto"`      | `"ctrl"` or `"cmd"`; auto is Cmd on macOS |
+|             | `copy_key`          | `"c"`         | physical copy key (Dvorak on Linux: `"i"`) |
+|             | `paste_key`         | `"v"`         | physical paste key (Dvorak on Linux: `"."`) |
+|             | `numpad`            | `true`        | keypad digits pick slots too |
+| `[history]` | `max_items`         | `500`         | entries kept; slots never count |
+|             | `max_age_days`      | `0`           | 0 keeps entries forever |
+|             | `min_length`        | `1`           | ignore shorter text |
+|             | `max_length`        | `0`           | ignore longer text, 0 for no limit |
+|             | `max_image_mb`      | `20`          | ignore bigger images |
+|             | `ignore_sensitive`  | `true`        | skip password manager copies |
+|             | `ignore_blank`      | `true`        | skip whitespace-only copies |
+| `[paste]`   | `restore_clipboard` | `true`        | put the old clipboard back after a slot paste |
+|             | `restore_delay_ms`  | `300`         | how long to wait before restoring |
+|             | `notify`            | `true`        | notification when a slot is saved |
+| `[picker]`  | `command`           | `"builtin"`   | or a dmenu command like `"fuzzel --dmenu"` |
+|             | `width`, `height`   | `640`, `460`  | window size |
+|             | `close_on_unfocus`  | `true`        | close when you click elsewhere |
+| `[theme]`   | `pywal`             | `false`       | colors from `~/.cache/wal/colors.json` |
+|             | `background`, `surface`, `foreground`, `muted`, `accent` | dark theme | `"#rrggbb"` or `"#rrggbbaa"` |
+|             | `radius`, `font_size` | `12`, `15`  | corner radius and text size |
 
 ## Files
 
@@ -246,7 +271,8 @@ person:
    after still pastes the other thing.
 4. Ctrl+1 in a browser still switches tabs.
 5. In a terminal, Ctrl+Shift+V then 1 pastes slot 1.
-6. Super+V opens the picker, Enter pastes, Esc closes.
+6. The picker hotkey (Super+V, Ctrl+Alt+V on Windows) opens the picker,
+   Enter pastes, Esc closes. On Windows, Win+V still opens the Windows clipboard.
 7. Copy from a password manager: it is not in `hotbar list`.
 
 ## Building

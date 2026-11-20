@@ -1,69 +1,24 @@
-# hotbar config
-#
-# Linux and macOS: ~/.config/hotbar/config.toml
-# Windows:         %APPDATA%\hotbar\config\config.toml
-#
-# The daemon reloads this file by itself when you save it.
-
-[history]
-max_items = 500          # entries kept (slots never count and are never dropped)
-max_age_days = 0         # 0 keeps entries forever
-min_length = 1           # ignore text shorter than this
-max_length = 0           # ignore text longer than this, 0 for no limit
-max_image_mb = 20        # ignore images bigger than this
-ignore_sensitive = true  # skip copies that password managers mark as secret
-ignore_blank = true      # skip copies that are only whitespace
+# hotbar config. Every line is optional: delete anything you don't change.
+# The daemon reloads this file when you save it.
 
 [keys]
-# How the slot chords work:
-#   "ctrl-held"  hold Ctrl, tap V (or C), tap a digit. A plain Ctrl+V pastes
-#                as soon as you let go of Ctrl or press any other key.
-#   "release"    Ctrl+V, let go of everything, then press a digit within
-#                timeout_ms. Normal pastes wait for the timeout.
-#   "off"        no key handling. Bind `hotbar paste N` and `hotbar save N`
-#                in your window manager instead.
+# "ctrl-held"  hold Ctrl, tap V, tap a digit (default)
+# "release"    Ctrl+V, let go, then the digit within 300 ms
+# "off"        no key handling; bind `hotbar paste N` in your window manager
 chord = "ctrl-held"
-timeout_ms = 300
 
-# "auto" uses Cmd on macOS and Ctrl everywhere else.
-primary = "auto"
+# Picker hotkey. Default: super+v on Linux, ctrl+alt+v on Windows,
+# cmd+shift+v on macOS. Use "" to turn it off.
+# picker = "ctrl+alt+v"
 
-# Opens the history picker. Default is "super+v" ("cmd+shift+v" on macOS).
-# Set it to "" if your window manager runs `hotbar pick` itself.
-# picker = "super+v"
-
-# Physical keys used for copy and paste. Dvorak users on Linux want
-# copy_key = "i" and paste_key = ".".
-copy_key = "c"
-paste_key = "v"
-
-# Accept keypad digits too.
-numpad = true
-
-[paste]
-# After pasting a slot, put back what was on the clipboard before.
-restore_clipboard = true
-restore_delay_ms = 300
-# Small notification when a slot is saved.
-notify = true
+[history]
+max_items = 500
+max_age_days = 0     # 0 keeps entries forever
 
 [picker]
-# "builtin" or any dmenu style command, for example:
-#   command = "fuzzel --dmenu"
-#   command = "rofi -dmenu -p hotbar"
-#   command = "wofi --dmenu"
+# "builtin", or a menu such as "fuzzel --dmenu" or "rofi -dmenu"
 command = "builtin"
-width = 640.0
-height = 460.0
-close_on_unfocus = true
 
 [theme]
-# Use colors from pywal (~/.cache/wal/colors.json) when available.
-pywal = false
-background = "#1e1e2ef5"
-surface = "#313244"
-foreground = "#cdd6f4"
-muted = "#7f849c"
+pywal = false        # use colors from ~/.cache/wal/colors.json
 accent = "#89b4fa"
-radius = 12.0
-font_size = 15.0

@@ -763,6 +763,32 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_alt_v_picker_leaves_win_v_alone() {
+        let mut t = T::with(EngineConfig {
+            picker: Hotkey::parse("ctrl+alt+v"),
+            ..EngineConfig::default()
+        });
+        t.send(ctrl(true));
+        t.send(alt(true));
+        assert_eq!(t.send(v(true)), Outcome::swallow(vec![Act::OpenPicker]));
+        assert_eq!(t.send(v(false)), eat());
+        t.send(alt(false));
+        t.send(ctrl(false));
+        // Win+V goes to Windows untouched
+        t.send(meta(true));
+        assert_eq!(t.send(v(true)), pass());
+        assert_eq!(t.send(v(false)), pass());
+        t.send(meta(false));
+        // and plain Ctrl+V chords still work
+        t.send(ctrl(true));
+        assert_eq!(t.send(v(true)), eat());
+        assert_eq!(
+            t.send(d(2, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 2, mods: CTRL }])
+        );
+    }
+
+    #[test]
     fn mac_primary_is_cmd_and_picker_wins() {
         let mut t = T::with(EngineConfig {
             primary: Primary::Meta,

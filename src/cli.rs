@@ -19,7 +19,7 @@ use crate::store::Store;
         While the daemon runs:\n  \
         Ctrl+C then a digit   copy and also save to that slot\n  \
         Ctrl+V then a digit   paste that slot (keep Ctrl down, tap V, tap the digit)\n  \
-        Super+V               open the history picker\n\n\
+        Super+V               open the history picker (Ctrl+Alt+V on Windows)\n\n\
         On macOS use Cmd instead of Ctrl, and Cmd+Shift+V for the picker."
 )]
 pub struct Cli {

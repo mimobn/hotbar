@@ -384,7 +384,7 @@ pub fn doctor() -> Result<()> {
     {
         let _ = ok;
         println!("[ok  ] Windows needs no extra permissions");
-        println!("       Win+V opens hotbar's picker while the daemon runs (set keys.picker = \"\" to keep the Windows one)");
+        println!("       Ctrl+Alt+V opens hotbar's picker. Win+V stays the Windows clipboard.");
     }
     Ok(())
 }
