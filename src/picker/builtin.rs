@@ -73,37 +73,119 @@ struct App {
     thumbs: HashMap<u64, Option<TextureHandle>>,
     return_to: isize,
     close_on_unfocus: bool,
-    had_focus: bool,
+    focused_since: Option<std::time::Instant>,
     frames: u32,
     status: Option<String>,
 }
 
 impl App {
+    /// History entries matching the search. Entries held in a slot carry its number.
     fn rows(&self) -> Vec<Row> {
         let q = self.query.to_lowercase();
-        let hit = |m: &EntryMeta| q.is_empty() || m.preview.to_lowercase().contains(&q);
-        let mut rows = Vec::new();
-        let mut in_slot = Vec::new();
-        for s in &self.slots {
-            if let Some(m) = &s.entry {
-                in_slot.push(m.id);
-                if hit(m) {
-                    rows.push(Row {
-                        meta: m.clone(),
-                        slot: Some(s.n),
-                    });
+        self.entries
+            .iter()
+            .filter(|m| q.is_empty() || m.preview.to_lowercase().contains(&q))
+            .map(|m| Row {
+                meta: m.clone(),
+                slot: self
+                    .slots
+                    .iter()
+                    .find(|s| s.entry.as_ref().map(|e| e.id) == Some(m.id))
+                    .map(|s| s.n),
+            })
+            .collect()
+    }
+
+    /// The nine slots as a row of cards, always visible, empty or not.
+    fn hotbar(&mut self, ui: &mut egui::Ui, action: &mut Option<Action>) {
+        let gap = 6.0;
+        let w = ((ui.available_width() - gap * 8.0) / 9.0).max(30.0);
+        let h = self.font_size * 3.6;
+        let slots = self.slots.clone();
+        let ctx = ui.ctx().clone();
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for s in &slots {
+                let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), Sense::click());
+                let filled = s.entry.is_some();
+                let hovered = resp.hovered();
+                let fill = match (filled, hovered) {
+                    (true, true) => self.c.accent.gamma_multiply(0.35),
+                    (true, false) => self.c.accent.gamma_multiply(0.18),
+                    (false, true) => self.c.surface,
+                    (false, false) => self.c.surface.gamma_multiply(0.6),
+                };
+                let painter = ui.painter_at(rect);
+                painter.rect_filled(rect, self.radius * 0.6, fill);
+                if filled {
+                    painter.rect_stroke(
+                        rect,
+                        self.radius * 0.6,
+                        egui::Stroke::new(1.0_f32, self.c.accent.gamma_multiply(0.6)),
+                    );
+                }
+                let pad = 6.0;
+                let num_color = if filled { self.c.accent } else { self.c.muted };
+                painter.text(
+                    rect.left_top() + egui::vec2(pad, pad * 0.6),
+                    egui::Align2::LEFT_TOP,
+                    s.n.to_string(),
+                    egui::FontId::monospace(self.font_size * 0.95),
+                    num_color,
+                );
+                let body = egui::Rect::from_min_max(
+                    rect.left_top() + egui::vec2(pad, self.font_size * 1.45),
+                    rect.right_bottom() - egui::vec2(pad, pad * 0.8),
+                );
+                let image = match &s.entry {
+                    Some(m) if m.kind == Kind::Image => self.thumb(&ctx, m.id),
+                    _ => None,
+                };
+                if let Some(tex) = image {
+                    // Fit the thumbnail inside the card, keeping its shape.
+                    let size = tex.size_vec2();
+                    let scale = (body.width() / size.x).min(body.height() / size.y);
+                    let fit = egui::Rect::from_center_size(body.center(), size * scale);
+                    let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                    painter.image(tex.id(), fit, uv, Color32::WHITE);
+                } else {
+                    let (text, color) = match &s.entry {
+                        Some(m) if m.kind == Kind::Image => ("image".to_string(), self.c.fg),
+                        Some(m) => (m.preview.clone(), self.c.fg),
+                        None => ("empty".to_string(), self.c.muted.gamma_multiply(0.8)),
+                    };
+                    let mut job = egui::text::LayoutJob::simple(
+                        text,
+                        egui::FontId::proportional(self.font_size * 0.72),
+                        color,
+                        body.width(),
+                    );
+                    job.wrap.max_rows = 2;
+                    job.wrap.break_anywhere = true;
+                    let galley = ui.fonts(|f| f.layout_job(job));
+                    painter.galley(body.left_top(), galley, color);
+                }
+                let tip = match &s.entry {
+                    Some(m) => format!("Slot {}: {}\nClick or press {} to paste", s.n, m.preview, s.n),
+                    None => format!(
+                        "Slot {} is empty.\nCopy with Ctrl+C then {}, or select an entry below and press Alt+{}",
+                        s.n, s.n, s.n
+                    ),
+                };
+                let resp = resp.on_hover_text(tip);
+                if resp.clicked() && filled {
+                    *action = Some(Action::PasteSlot(s.n));
                 }
             }
+        });
+        if self.slots.iter().all(|s| s.entry.is_none()) {
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new("No slots yet: Ctrl+C then a digit saves a copy to that slot, or pick an entry below and press Alt+digit.")
+                    .color(self.c.muted)
+                    .small(),
+            );
         }
-        for m in &self.entries {
-            if !in_slot.contains(&m.id) && hit(m) {
-                rows.push(Row {
-                    meta: m.clone(),
-                    slot: None,
-                });
-            }
-        }
-        rows
     }
 
     fn reload(&mut self) {
@@ -139,10 +221,12 @@ impl App {
     }
 
     fn apply(&mut self, ctx: &egui::Context, a: Action) {
-        let close = |ctx: &egui::Context, to: isize| {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        // The daemon does the actual paste, so the picker can simply quit.
+        // (Hiding the window and asking egui to close it can leave a hidden
+        // process behind, because egui stops running hidden windows.)
+        let close = |_: &egui::Context, to: isize| {
             crate::system::focus_window(to);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            std::process::exit(0);
         };
         match a {
             Action::PasteEntry(id) => {
@@ -243,18 +327,24 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.frames += 1;
-        if self.frames < 4 {
-            crate::system::force_foreground(TITLE);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
-        if self.close_on_unfocus {
-            match ctx.input(|i| i.viewport().focused) {
-                Some(true) => self.had_focus = true,
-                Some(false) if self.had_focus => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    return;
-                }
-                _ => {}
+        // Focus can bounce while the window appears. Keep asking for it until
+        // we have held it for a moment; only after that does losing focus
+        // (clicking elsewhere) close the picker.
+        let focused = ctx.input(|i| i.viewport().focused) == Some(true);
+        let settled = self
+            .focused_since
+            .is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(400));
+        if focused {
+            self.focused_since
+                .get_or_insert_with(std::time::Instant::now);
+        } else if settled && self.close_on_unfocus {
+            std::process::exit(0);
+        } else {
+            self.focused_since = None;
+            if self.frames < 120 {
+                crate::system::force_foreground(TITLE);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
         }
 
@@ -288,7 +378,11 @@ impl eframe::App for App {
             if self.query != before {
                 self.selected = 0;
             }
-            ui.add_space(8.0);
+            ui.add_space(10.0);
+            self.hotbar(ui, &mut action);
+            ui.add_space(10.0);
+            ui.label(RichText::new("History").color(self.c.muted).small());
+            ui.add_space(2.0);
 
             let footer_h = self.font_size * 1.6;
             let list_h = (ui.available_height() - footer_h).max(40.0);
@@ -367,7 +461,8 @@ impl eframe::App for App {
 
             ui.add_space(4.0);
             let hint = self.status.clone().unwrap_or_else(|| {
-                "Enter paste    Alt+digit pin to slot    Del delete    Esc close".into()
+                "Enter paste    1 to 9 paste slot    Alt+digit save to slot    Del delete    Esc close"
+                    .into()
             });
             ui.label(RichText::new(hint).color(self.c.muted).small());
         });
@@ -407,7 +502,7 @@ pub fn run(return_to: isize) -> Result<()> {
         thumbs: HashMap::new(),
         return_to,
         close_on_unfocus: cfg.picker.close_on_unfocus,
-        had_focus: false,
+        focused_since: None,
         frames: 0,
         status: None,
     };

@@ -74,8 +74,7 @@ pub fn notify(title: &str, body: &str) {
     }
     #[cfg(windows)]
     {
-        // No toast without an installed app identity; the log keeps a record.
-        crate::log!("{title}: {body}");
+        crate::osd::show(&format!("{title}   {body}"));
     }
 }
 

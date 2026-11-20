@@ -37,6 +37,7 @@ pub struct Daemon {
     paste_lock: Mutex<()>,
     armed_seq: AtomicU64,
     picker_open: AtomicBool,
+    picker_child: Mutex<Option<std::process::Child>>,
     own_writes_echo: bool,
 }
 
@@ -266,6 +267,10 @@ impl Daemon {
 
     fn open_picker(self: &Arc<Self>) {
         if self.picker_open.swap(true, Ordering::SeqCst) {
+            // Pressing the hotkey again closes the picker.
+            if let Some(child) = lock(&self.picker_child).as_mut() {
+                let _ = child.kill();
+            }
             return;
         }
         let me = self.clone();
@@ -292,8 +297,20 @@ impl Daemon {
             cmd.arg("--return-to").arg(return_to.to_string());
         }
         system::no_console(&mut cmd);
-        cmd.status().context("could not start the picker")?;
-        Ok(())
+        let child = cmd.spawn().context("could not start the picker")?;
+        *lock(&self.picker_child) = Some(child);
+        loop {
+            std::thread::sleep(Duration::from_millis(100));
+            let mut slot = lock(&self.picker_child);
+            let done = match slot.as_mut() {
+                Some(c) => !matches!(c.try_wait(), Ok(None)),
+                None => true,
+            };
+            if done {
+                *slot = None;
+                return Ok(());
+            }
+        }
     }
 
     fn on_act(self: &Arc<Self>, act: Act) {
@@ -459,6 +476,7 @@ pub fn run() -> Result<()> {
         paste_lock: Mutex::new(()),
         armed_seq: AtomicU64::new(0),
         picker_open: AtomicBool::new(false),
+        picker_child: Mutex::new(None),
         own_writes_echo,
     });
 

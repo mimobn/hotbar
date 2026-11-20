@@ -45,7 +45,7 @@ keeps that workflow (same `list` and `decode` pipes) and adds:
 | Wayland                        | yes    | yes      | yes       | yes    |
 | X11, Windows, macOS            | yes    | no       | no        | no     |
 | Runs without `wl-paste --watch`| yes    | no       | no        | no     |
-| Images                         | yes    | yes      | yes       | yes    |
+| Images (in history and slots)  | yes    | yes      | yes       | yes    |
 | Built-in picker window         | yes    | no       | no        | TUI    |
 
 Also:
@@ -147,7 +147,8 @@ Nothing to set up. Run `hotbar daemon`, or `hotbar autostart on` to start it
 at login (it uses `hotbarw.exe`, which has no console window).
 
 Ctrl+Alt+V opens hotbar's picker. Win+V stays the Windows clipboard, so both
-work side by side.
+work side by side. Saving to a slot, or pasting an empty one, shows a small
+popup near the bottom of the screen that never takes focus.
 
 ### macOS
 
@@ -162,7 +163,11 @@ hotbar autostart on   # LaunchAgent
 ## Picker
 
 `Super+V` on Linux, `Ctrl+Alt+V` on Windows, `Cmd+Shift+V` on macOS, or run
-`hotbar pick`.
+`hotbar pick`. Press the hotkey again to close it.
+
+The top row is your hotbar: the nine slots, filled or empty, with a
+thumbnail for images. Click a slot to paste it. History is listed below, and
+entries held in a slot show its number.
 
 | Key            | Does                                          |
 |----------------|-----------------------------------------------|

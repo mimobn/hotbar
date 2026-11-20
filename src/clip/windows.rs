@@ -18,8 +18,8 @@ use windows_sys::Win32::System::Memory::{
     GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
-    TranslateMessage, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, KillTimer, RegisterClassW,
+    SetTimer, TranslateMessage, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WNDCLASSW,
 };
 
 use super::{ClipEvent, Clipboard};
@@ -172,42 +172,70 @@ fn png_to_dib(png: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
+enum Raw {
+    Text(String),
+    Png(Vec<u8>),
+    Dib(Vec<u8>),
+}
+
 unsafe fn read_current() -> Option<ClipEvent> {
     let f = formats();
-    let _open = Open::new().ok()?;
-    let mut sensitive = IsClipboardFormatAvailable(f.exclude) != 0;
-    if let Some(b) = read_bytes(f.can_include) {
-        if b.len() >= 4 && u32::from_le_bytes(b[..4].try_into().unwrap()) == 0 {
-            sensitive = true;
+    // Copy the raw bytes and let go of the clipboard right away; other apps
+    // cannot copy while we hold it. Image conversion happens afterwards.
+    let (raw, sensitive) = {
+        let _open = Open::new().ok()?;
+        let mut sensitive = IsClipboardFormatAvailable(f.exclude) != 0;
+        if let Some(b) = read_bytes(f.can_include) {
+            if b.len() >= 4 && u32::from_le_bytes(b[..4].try_into().unwrap()) == 0 {
+                sensitive = true;
+            }
         }
-    }
-    let content = if let Some(t) = read_text() {
-        Content::Text(t)
-    } else if let Some(png) = read_bytes(f.png) {
-        Content::Image(png)
-    } else {
-        Content::Image(
-            read_bytes(CF_DIB)
-                .and_then(|d| dib_to_bmp(&d))
-                .and_then(|b| to_png(&b))?,
-        )
+        let raw = if let Some(t) = read_text() {
+            Raw::Text(t)
+        } else if let Some(png) = read_bytes(f.png) {
+            Raw::Png(png)
+        } else {
+            Raw::Dib(read_bytes(CF_DIB)?)
+        };
+        (raw, sensitive)
+    };
+    let content = match raw {
+        Raw::Text(t) => Content::Text(t),
+        Raw::Png(p) => Content::Image(p),
+        Raw::Dib(d) => Content::Image(dib_to_bmp(&d).and_then(|b| to_png(&b))?),
     };
     Some(ClipEvent { content, sensitive })
 }
 
+const WM_TIMER: u32 = 0x0113;
+const READ_TIMER: usize = 7;
+/// Wait a little after a change before reading: many apps (anything using
+/// OleFlushClipboard) open the clipboard again right after setting it, and
+/// reading at that moment makes their copy fail.
+const READ_DELAY_MS: u32 = 60;
+
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if msg == WM_CLIPBOARDUPDATE {
-        // Our own writes are transient (slot pastes and restores): skip them.
-        if GetClipboardOwner() != own_hwnd() {
-            if let Some(ev) = read_current() {
-                if let Some(s) = SINK.get() {
-                    let _ = s.lock().unwrap_or_else(|e| e.into_inner()).send(ev);
+    match msg {
+        WM_CLIPBOARDUPDATE => {
+            // Our own writes are transient (slot pastes and restores): skip them.
+            if GetClipboardOwner() != own_hwnd() {
+                SetTimer(hwnd, READ_TIMER, READ_DELAY_MS, None);
+            }
+            0
+        }
+        WM_TIMER if wp == READ_TIMER => {
+            KillTimer(hwnd, READ_TIMER);
+            if GetClipboardOwner() != own_hwnd() {
+                if let Some(ev) = read_current() {
+                    if let Some(s) = SINK.get() {
+                        let _ = s.lock().unwrap_or_else(|e| e.into_inner()).send(ev);
+                    }
                 }
             }
+            0
         }
-        return 0;
+        _ => DefWindowProcW(hwnd, msg, wp, lp),
     }
-    DefWindowProcW(hwnd, msg, wp, lp)
 }
 
 unsafe fn set_bytes(fmt: u32, bytes: &[u8]) -> bool {
@@ -229,23 +257,28 @@ struct WinClipboard;
 impl Clipboard for WinClipboard {
     fn write(&self, c: &Content, transient: bool) -> Result<()> {
         let f = formats();
+        // Prepare every format before opening the clipboard, so it stays locked
+        // only for the copy itself.
+        let formats: Vec<(u32, Vec<u8>)> = match c {
+            Content::Text(s) => vec![(
+                CF_UNICODETEXT,
+                wide(s).iter().flat_map(|u| u.to_le_bytes()).collect(),
+            )],
+            Content::Image(png) => {
+                let mut v = vec![(f.png, png.clone())];
+                if let Some(d) = png_to_dib(png) {
+                    v.push((CF_DIB, d));
+                }
+                v
+            }
+        };
         let _open = Open::new()?;
         unsafe {
             EmptyClipboard();
-            let ok = match c {
-                Content::Text(s) => {
-                    let w = wide(s);
-                    let b: Vec<u8> = w.iter().flat_map(|u| u.to_le_bytes()).collect();
-                    set_bytes(CF_UNICODETEXT, &b)
-                }
-                Content::Image(png) => {
-                    let a = set_bytes(f.png, png);
-                    let b = png_to_dib(png)
-                        .map(|d| set_bytes(CF_DIB, &d))
-                        .unwrap_or(false);
-                    a || b
-                }
-            };
+            let mut ok = false;
+            for (fmt, bytes) in &formats {
+                ok |= set_bytes(*fmt, bytes);
+            }
             if transient {
                 set_bytes(f.exclude, &[0]);
                 set_bytes(f.can_include, &0u32.to_le_bytes());

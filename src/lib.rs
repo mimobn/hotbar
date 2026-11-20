@@ -9,6 +9,8 @@ pub mod daemon;
 pub mod input;
 pub mod ipc;
 pub mod logging;
+#[cfg(windows)]
+pub mod osd;
 pub mod picker;
 pub mod store;
 pub mod system;
