@@ -18,17 +18,38 @@ use crate::store::EntryMeta;
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
     Ping,
-    List { limit: usize },
+    List {
+        limit: usize,
+    },
     Slots,
-    Get { id: u64 },
-    GetSlot { n: u8 },
-    SetSlotData { n: u8, kind: Kind, data: String },
-    SetSlotEntry { n: u8, id: u64 },
-    ClearSlot { n: u8 },
-    Delete { id: u64 },
-    Wipe { slots: bool },
+    Get {
+        id: u64,
+    },
+    GetSlot {
+        n: u8,
+    },
+    SetSlotData {
+        n: u8,
+        kind: Kind,
+        data: String,
+    },
+    SetSlotEntry {
+        n: u8,
+        id: u64,
+    },
+    ClearSlot {
+        n: u8,
+    },
+    Delete {
+        id: u64,
+    },
+    Wipe {
+        slots: bool,
+    },
     /// Current clipboard into slot n.
-    SaveSlot { n: u8 },
+    SaveSlot {
+        n: u8,
+    },
     /// Paste slot n into the focused window.
     PasteSlot {
         n: u8,
@@ -36,9 +57,14 @@ pub enum Request {
         delay_ms: u64,
     },
     /// Put an entry on the clipboard and paste it (used by pickers).
-    PasteEntry { id: u64, delay_ms: u64 },
+    PasteEntry {
+        id: u64,
+        delay_ms: u64,
+    },
     /// Put an entry on the clipboard without pasting.
-    CopyEntry { id: u64 },
+    CopyEntry {
+        id: u64,
+    },
     OpenPicker,
     Stop,
 }
@@ -62,11 +88,16 @@ pub enum Response {
 
 impl Response {
     pub fn err(e: impl std::fmt::Display) -> Response {
-        Response::Error { message: e.to_string() }
+        Response::Error {
+            message: e.to_string(),
+        }
     }
 
     pub fn data(c: &Content) -> Response {
-        Response::Data { kind: c.kind(), data: encode(c.bytes()) }
+        Response::Data {
+            kind: c.kind(),
+            data: encode(c.bytes()),
+        }
     }
 
     pub fn into_result(self) -> Result<Response> {
@@ -118,7 +149,8 @@ fn name() -> Result<Name<'static>> {
 
 /// Send one request to the running daemon. Errors if none is running.
 pub fn send(req: &Request) -> Result<Response> {
-    let conn = Stream::connect(name()?).context("hotbar daemon is not running (start it with `hotbar daemon`)")?;
+    let conn = Stream::connect(name()?)
+        .context("hotbar daemon is not running (start it with `hotbar daemon`)")?;
     let mut conn = BufReader::new(conn);
     let mut line = serde_json::to_string(req)?;
     line.push('\n');

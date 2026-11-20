@@ -8,12 +8,12 @@ use anyhow::{bail, Result};
 use windows_sys::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
-    KEYEVENTF_KEYUP,
+    GetAsyncKeyState, MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+    KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage, KBDLLHOOKSTRUCT, MSG,
-    WH_KEYBOARD_LL,
+    CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage,
+    KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL,
 };
 
 use super::{numpad, on_key, symbol_key, Injector, SharedEngine};
@@ -94,7 +94,11 @@ fn send(inputs: &[INPUT]) {
         return;
     }
     unsafe {
-        SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
     }
 }
 
@@ -149,7 +153,10 @@ impl Injector for WinInjector {
     }
 
     fn mask_menu(&self) {
-        send(&[key_input(VK_MASK, false, None, false), key_input(VK_MASK, true, None, false)]);
+        send(&[
+            key_input(VK_MASK, false, None, false),
+            key_input(VK_MASK, true, None, false),
+        ]);
     }
 
     fn hooked(&self) -> bool {
@@ -178,7 +185,8 @@ unsafe extern "system" fn hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                     key: map_vk(k.vkCode),
                     down,
                     raw: k.vkCode,
-                    extra: (k.scanCode as u64 & 0xFFFF) | (((k.flags & LLKHF_EXTENDED) as u64) << 32),
+                    extra: (k.scanCode as u64 & 0xFFFF)
+                        | (((k.flags & LLKHF_EXTENDED) as u64) << 32),
                 };
                 let tx = ctx.tx.lock().unwrap_or_else(|e| e.into_inner()).clone();
                 if on_key(&ctx.engine, ctx.inj.as_ref(), &tx, ev) {
@@ -206,18 +214,20 @@ pub fn start(engine: SharedEngine, tx: Sender<Act>, hook_keys: bool) -> Result<A
         bail!("keyboard hook already started");
     }
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<bool>();
-    std::thread::Builder::new().name("keyboard-hook".into()).spawn(move || unsafe {
-        let h = SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), GetModuleHandleW(null()), 0);
-        let _ = ready_tx.send(!h.is_null());
-        if h.is_null() {
-            return;
-        }
-        let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    })?;
+    std::thread::Builder::new()
+        .name("keyboard-hook".into())
+        .spawn(move || unsafe {
+            let h = SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), GetModuleHandleW(null()), 0);
+            let _ = ready_tx.send(!h.is_null());
+            if h.is_null() {
+                return;
+            }
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        })?;
     if !ready_rx.recv().unwrap_or(false) {
         bail!("could not install the keyboard hook");
     }

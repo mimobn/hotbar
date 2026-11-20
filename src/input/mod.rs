@@ -103,6 +103,12 @@ pub fn start(engine: SharedEngine, tx: Sender<Act>, hook: bool) -> Result<Arc<dy
     Ok(inj)
 }
 
+/// (Accessibility, Input Monitoring) permission state.
+#[cfg(target_os = "macos")]
+pub fn macos_permissions() -> (bool, bool) {
+    macos::permissions()
+}
+
 /// Letter or symbol for a key, shared by the platform key tables.
 pub fn symbol_key(c: char) -> crate::chord::Key {
     crate::chord::Key::Char(c.to_ascii_lowercase())

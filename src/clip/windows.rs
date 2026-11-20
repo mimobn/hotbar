@@ -9,14 +9,17 @@ use std::time::Duration;
 use anyhow::{bail, Result};
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::DataExchange::{
-    AddClipboardFormatListener, CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardOwner,
-    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    AddClipboardFormatListener, CloseClipboard, EmptyClipboard, GetClipboardData,
+    GetClipboardOwner, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
+    SetClipboardData,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
+use windows_sys::Win32::System::Memory::{
+    GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, HWND_MESSAGE, MSG,
-    WM_CLIPBOARDUPDATE, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
+    TranslateMessage, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WNDCLASSW,
 };
 
 use super::{ClipEvent, Clipboard};
@@ -41,7 +44,9 @@ fn formats() -> &'static Formats {
     F.get_or_init(|| unsafe {
         Formats {
             png: RegisterClipboardFormatW(wide("PNG").as_ptr()),
-            exclude: RegisterClipboardFormatW(wide("ExcludeClipboardContentFromMonitorProcessing").as_ptr()),
+            exclude: RegisterClipboardFormatW(
+                wide("ExcludeClipboardContentFromMonitorProcessing").as_ptr(),
+            ),
             can_include: RegisterClipboardFormatW(wide("CanIncludeInClipboardHistory").as_ptr()),
             can_upload: RegisterClipboardFormatW(wide("CanUploadToCloudClipboard").as_ptr()),
         }
@@ -98,7 +103,12 @@ unsafe fn read_bytes(fmt: u32) -> Option<Vec<u8>> {
 
 unsafe fn read_text() -> Option<String> {
     let b = read_bytes(CF_UNICODETEXT)?;
-    let u: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let u: Vec<u16> = b
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .collect();
     let end = u.iter().position(|&c| c == 0).unwrap_or(u.len());
     Some(String::from_utf16_lossy(&u[..end]))
 }
@@ -175,10 +185,12 @@ unsafe fn read_current() -> Option<ClipEvent> {
         Content::Text(t)
     } else if let Some(png) = read_bytes(f.png) {
         Content::Image(png)
-    } else if let Some(png) = read_bytes(CF_DIB).and_then(|d| dib_to_bmp(&d)).and_then(|b| to_png(&b)) {
-        Content::Image(png)
     } else {
-        return None;
+        Content::Image(
+            read_bytes(CF_DIB)
+                .and_then(|d| dib_to_bmp(&d))
+                .and_then(|b| to_png(&b))?,
+        )
     };
     Some(ClipEvent { content, sensitive })
 }
@@ -228,7 +240,9 @@ impl Clipboard for WinClipboard {
                 }
                 Content::Image(png) => {
                     let a = set_bytes(f.png, png);
-                    let b = png_to_dib(png).map(|d| set_bytes(CF_DIB, &d)).unwrap_or(false);
+                    let b = png_to_dib(png)
+                        .map(|d| set_bytes(CF_DIB, &d))
+                        .unwrap_or(false);
                     a || b
                 }
             };
@@ -252,58 +266,60 @@ impl Clipboard for WinClipboard {
 pub fn start(tx: Sender<ClipEvent>) -> Result<Arc<dyn Clipboard>> {
     let _ = SINK.set(Mutex::new(tx));
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
-    std::thread::Builder::new().name("clipboard".into()).spawn(move || unsafe {
-        let hinst = GetModuleHandleW(null());
-        let class = wide("hotbar_clipboard");
-        let wc = WNDCLASSW {
-            style: 0,
-            lpfnWndProc: Some(wndproc),
-            cbClsExtra: 0,
-            cbWndExtra: 0,
-            hInstance: hinst,
-            hIcon: null_mut(),
-            hCursor: null_mut(),
-            hbrBackground: null_mut(),
-            lpszMenuName: null(),
-            lpszClassName: class.as_ptr(),
-        };
-        RegisterClassW(&wc);
-        let hwnd = CreateWindowExW(
-            0,
-            class.as_ptr(),
-            wide("hotbar").as_ptr(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            HWND_MESSAGE,
-            null_mut(),
-            hinst,
-            null(),
-        );
-        if hwnd.is_null() {
-            let _ = ready_tx.send(Err("could not create clipboard window".into()));
-            return;
-        }
-        OWN_HWND.store(hwnd as isize, Ordering::SeqCst);
-        if AddClipboardFormatListener(hwnd) == 0 {
-            let _ = ready_tx.send(Err("AddClipboardFormatListener failed".into()));
-            return;
-        }
-        let _ = ready_tx.send(Ok(()));
-        // Record what is on the clipboard right now.
-        if let Some(ev) = read_current() {
-            if let Some(s) = SINK.get() {
-                let _ = s.lock().unwrap_or_else(|e| e.into_inner()).send(ev);
+    std::thread::Builder::new()
+        .name("clipboard".into())
+        .spawn(move || unsafe {
+            let hinst = GetModuleHandleW(null());
+            let class = wide("hotbar_clipboard");
+            let wc = WNDCLASSW {
+                style: 0,
+                lpfnWndProc: Some(wndproc),
+                cbClsExtra: 0,
+                cbWndExtra: 0,
+                hInstance: hinst,
+                hIcon: null_mut(),
+                hCursor: null_mut(),
+                hbrBackground: null_mut(),
+                lpszMenuName: null(),
+                lpszClassName: class.as_ptr(),
+            };
+            RegisterClassW(&wc);
+            let hwnd = CreateWindowExW(
+                0,
+                class.as_ptr(),
+                wide("hotbar").as_ptr(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                null_mut(),
+                hinst,
+                null(),
+            );
+            if hwnd.is_null() {
+                let _ = ready_tx.send(Err("could not create clipboard window".into()));
+                return;
             }
-        }
-        let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    })?;
+            OWN_HWND.store(hwnd as isize, Ordering::SeqCst);
+            if AddClipboardFormatListener(hwnd) == 0 {
+                let _ = ready_tx.send(Err("AddClipboardFormatListener failed".into()));
+                return;
+            }
+            let _ = ready_tx.send(Ok(()));
+            // Record what is on the clipboard right now.
+            if let Some(ev) = read_current() {
+                if let Some(s) = SINK.get() {
+                    let _ = s.lock().unwrap_or_else(|e| e.into_inner()).send(ev);
+                }
+            }
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        })?;
     match ready_rx.recv() {
         Ok(Ok(())) => Ok(Arc::new(WinClipboard)),
         Ok(Err(e)) => bail!(e),

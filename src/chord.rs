@@ -128,11 +128,16 @@ pub enum Act {
     /// Send this (previously swallowed) event to the system now.
     Replay(KeyEvent),
     /// Press and release the paste key with exactly these modifiers held.
-    Tap { mods: Mods },
+    Tap {
+        mods: Mods,
+    },
     /// A copy shortcut went through. The daemon notes the clipboard state.
     CopyArmed,
     SaveSlot(u8),
-    PasteSlot { n: u8, mods: Mods },
+    PasteSlot {
+        n: u8,
+        mods: Mods,
+    },
     OpenPicker,
 }
 
@@ -148,10 +153,16 @@ impl Outcome {
         Outcome::default()
     }
     fn pass_with(acts: Vec<Act>) -> Self {
-        Outcome { swallow: false, acts }
+        Outcome {
+            swallow: false,
+            acts,
+        }
     }
     fn swallow(acts: Vec<Act>) -> Self {
-        Outcome { swallow: true, acts }
+        Outcome {
+            swallow: true,
+            acts,
+        }
     }
 }
 
@@ -159,13 +170,20 @@ impl Outcome {
 enum State {
     Idle,
     /// Paste key pressed with the primary modifier; waiting to see if a digit follows.
-    Pending { mods: Mods },
+    Pending {
+        mods: Mods,
+    },
     /// Copy shortcut went through; a digit now saves it to a slot.
     Armed,
     /// Release mode: everything let go after a paste, waiting for a digit.
-    WaitPaste { mods: Mods, deadline: Instant },
+    WaitPaste {
+        mods: Mods,
+        deadline: Instant,
+    },
     /// Release mode: everything let go after a copy, waiting for a digit.
-    WaitCopy { deadline: Instant },
+    WaitCopy {
+        deadline: Instant,
+    },
 }
 
 pub struct Engine {
@@ -456,7 +474,12 @@ mod tests {
     }
 
     fn ev(key: Key, raw: u32, down: bool) -> KeyEvent {
-        KeyEvent { key, down, raw, extra: 0 }
+        KeyEvent {
+            key,
+            down,
+            raw,
+            extra: 0,
+        }
     }
     fn ctrl(down: bool) -> KeyEvent {
         ev(Key::Ctrl, LCTRL, down)
@@ -483,8 +506,18 @@ mod tests {
         ev(Key::Digit(n), digit_raw(n), down)
     }
 
-    const CTRL: Mods = Mods { ctrl: true, shift: false, alt: false, meta: false };
-    const CTRL_SHIFT: Mods = Mods { ctrl: true, shift: true, alt: false, meta: false };
+    const CTRL: Mods = Mods {
+        ctrl: true,
+        shift: false,
+        alt: false,
+        meta: false,
+    };
+    const CTRL_SHIFT: Mods = Mods {
+        ctrl: true,
+        shift: true,
+        alt: false,
+        meta: false,
+    };
 
     struct T {
         e: Engine,
@@ -496,10 +529,16 @@ mod tests {
             T::with(EngineConfig::default())
         }
         fn with(cfg: EngineConfig) -> T {
-            T { e: Engine::new(cfg), now: Instant::now() }
+            T {
+                e: Engine::new(cfg),
+                now: Instant::now(),
+            }
         }
         fn release() -> T {
-            T::with(EngineConfig { mode: Mode::Release, ..EngineConfig::default() })
+            T::with(EngineConfig {
+                mode: Mode::Release,
+                ..EngineConfig::default()
+            })
         }
         fn send(&mut self, k: KeyEvent) -> Outcome {
             self.now += Duration::from_millis(20);
@@ -536,7 +575,10 @@ mod tests {
         t.send(ctrl(true));
         t.send(v(true));
         t.send(v(false));
-        assert_eq!(t.send(d(3, true)), Outcome::swallow(vec![Act::PasteSlot { n: 3, mods: CTRL }]));
+        assert_eq!(
+            t.send(d(3, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 3, mods: CTRL }])
+        );
         assert_eq!(t.send(d(3, false)), eat());
         assert_eq!(t.send(ctrl(false)), pass());
     }
@@ -546,7 +588,10 @@ mod tests {
         let mut t = T::new();
         t.send(ctrl(true));
         t.send(v(true));
-        assert_eq!(t.send(d(1, true)), Outcome::swallow(vec![Act::PasteSlot { n: 1, mods: CTRL }]));
+        assert_eq!(
+            t.send(d(1, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 1, mods: CTRL }])
+        );
         assert_eq!(t.send(v(false)), eat());
         assert_eq!(t.send(d(1, false)), eat());
         assert_eq!(t.send(ctrl(false)), pass());
@@ -571,8 +616,14 @@ mod tests {
         t.send(ctrl(true));
         assert_eq!(t.send(v(true)), eat());
         // auto repeat
-        assert_eq!(t.send(v(true)), Outcome::swallow(vec![Act::Tap { mods: CTRL }]));
-        assert_eq!(t.send(v(true)), Outcome::swallow(vec![Act::Tap { mods: CTRL }]));
+        assert_eq!(
+            t.send(v(true)),
+            Outcome::swallow(vec![Act::Tap { mods: CTRL }])
+        );
+        assert_eq!(
+            t.send(v(true)),
+            Outcome::swallow(vec![Act::Tap { mods: CTRL }])
+        );
         assert_eq!(t.send(v(false)), eat());
         assert_eq!(
             t.send(ctrl(false)),
@@ -629,7 +680,10 @@ mod tests {
         t.send(c(true));
         t.send(c(false));
         assert_eq!(t.send(v(true)), eat());
-        assert_eq!(t.send(d(5, true)), Outcome::swallow(vec![Act::PasteSlot { n: 5, mods: CTRL }]));
+        assert_eq!(
+            t.send(d(5, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 5, mods: CTRL }])
+        );
     }
 
     #[test]
@@ -642,7 +696,10 @@ mod tests {
         assert_eq!(t.send(shift(false)), pass());
         assert_eq!(
             t.send(d(7, true)),
-            Outcome::swallow(vec![Act::PasteSlot { n: 7, mods: CTRL_SHIFT }])
+            Outcome::swallow(vec![Act::PasteSlot {
+                n: 7,
+                mods: CTRL_SHIFT
+            }])
         );
     }
 
@@ -656,7 +713,10 @@ mod tests {
         t.send(shift(false));
         assert_eq!(
             t.send(ctrl(false)),
-            Outcome::swallow(vec![Act::Tap { mods: CTRL_SHIFT }, Act::Replay(ctrl(false))])
+            Outcome::swallow(vec![
+                Act::Tap { mods: CTRL_SHIFT },
+                Act::Replay(ctrl(false))
+            ])
         );
     }
 
@@ -711,22 +771,41 @@ mod tests {
         });
         t.send(meta(true));
         assert_eq!(t.send(v(true)), eat());
-        let cmd = Mods { meta: true, ..Mods::default() };
-        assert_eq!(t.send(d(2, true)), Outcome::swallow(vec![Act::PasteSlot { n: 2, mods: cmd }]));
+        let cmd = Mods {
+            meta: true,
+            ..Mods::default()
+        };
+        assert_eq!(
+            t.send(d(2, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 2, mods: cmd }])
+        );
         t.send(d(2, false));
         t.send(v(false));
         t.send(shift(true));
         assert_eq!(t.send(v(true)), Outcome::swallow(vec![Act::OpenPicker]));
         // Ctrl+V on a Mac is not a paste
-        let mut t2 = T::with(EngineConfig { primary: Primary::Meta, ..EngineConfig::default() });
+        let mut t2 = T::with(EngineConfig {
+            primary: Primary::Meta,
+            ..EngineConfig::default()
+        });
         t2.send(ctrl(true));
         assert_eq!(t2.send(v(true)), pass());
     }
 
     #[test]
     fn off_mode_passes_everything() {
-        let mut t = T::with(EngineConfig { mode: Mode::Off, ..EngineConfig::default() });
-        for k in [ctrl(true), v(true), d(1, true), d(1, false), v(false), ctrl(false)] {
+        let mut t = T::with(EngineConfig {
+            mode: Mode::Off,
+            ..EngineConfig::default()
+        });
+        for k in [
+            ctrl(true),
+            v(true),
+            d(1, true),
+            d(1, false),
+            v(false),
+            ctrl(false),
+        ] {
             assert_eq!(t.send(k), pass());
         }
     }
@@ -738,7 +817,10 @@ mod tests {
         t.send(v(true));
         t.send(v(false));
         assert_eq!(t.send(ctrl(false)), pass());
-        assert_eq!(t.send(d(2, true)), Outcome::swallow(vec![Act::PasteSlot { n: 2, mods: CTRL }]));
+        assert_eq!(
+            t.send(d(2, true)),
+            Outcome::swallow(vec![Act::PasteSlot { n: 2, mods: CTRL }])
+        );
         assert_eq!(t.send(d(2, false)), eat());
     }
 

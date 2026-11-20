@@ -192,7 +192,10 @@ impl Config {
             match Hotkey::parse(&self.keys.picker) {
                 Some(h) => Some(h),
                 None => {
-                    crate::log!("could not read picker hotkey {:?}, using none", self.keys.picker);
+                    crate::log!(
+                        "could not read picker hotkey {:?}, using none",
+                        self.keys.picker
+                    );
                     None
                 }
             }
@@ -246,7 +249,10 @@ pub fn data_dir() -> PathBuf {
 pub fn write_default_config(force: bool) -> Result<PathBuf> {
     let path = config_path();
     if path.exists() && !force {
-        anyhow::bail!("{} already exists (use --force to overwrite)", path.display());
+        anyhow::bail!(
+            "{} already exists (use --force to overwrite)",
+            path.display()
+        );
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -261,7 +267,11 @@ pub fn parse_color(s: &str) -> Option<[u8; 4]> {
     let byte = |i: usize| u8::from_str_radix(h.get(i..i + 2)?, 16).ok();
     match h.len() {
         3 => {
-            let d = |i: usize| u8::from_str_radix(h.get(i..i + 1)?, 16).ok().map(|v| v * 17);
+            let d = |i: usize| {
+                u8::from_str_radix(h.get(i..i + 1)?, 16)
+                    .ok()
+                    .map(|v| v * 17)
+            };
             Some([d(0)?, d(1)?, d(2)?, 255])
         }
         6 => Some([byte(0)?, byte(2)?, byte(4)?, 255]),
@@ -277,17 +287,26 @@ impl Theme {
         if !self.pywal {
             return t;
         }
-        let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) else {
+        let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+        else {
             return t;
         };
-        let path = PathBuf::from(home).join(".cache").join("wal").join("colors.json");
+        let path = PathBuf::from(home)
+            .join(".cache")
+            .join("wal")
+            .join("colors.json");
         let Ok(raw) = fs::read_to_string(path) else {
             return t;
         };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
             return t;
         };
-        let get = |a: &str, b: &str| v.get(a).and_then(|x| x.get(b)).and_then(|x| x.as_str()).map(String::from);
+        let get = |a: &str, b: &str| {
+            v.get(a)
+                .and_then(|x| x.get(b))
+                .and_then(|x| x.as_str())
+                .map(String::from)
+        };
         if let Some(bg) = get("special", "background") {
             t.background = format!("{bg}f5");
         }

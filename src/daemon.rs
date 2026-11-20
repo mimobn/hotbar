@@ -51,17 +51,32 @@ pub fn handle_store(store: &mut Store, limits: &Limits, req: &Request) -> Option
         Ok(match req {
             Request::List { limit } => {
                 let all = store.list();
-                let n = if *limit == 0 { all.len() } else { (*limit).min(all.len()) };
-                Response::Entries { entries: all[..n].to_vec() }
+                let n = if *limit == 0 {
+                    all.len()
+                } else {
+                    (*limit).min(all.len())
+                };
+                Response::Entries {
+                    entries: all[..n].to_vec(),
+                }
             }
             Request::Slots => Response::Slots {
-                slots: store.slots().into_iter().map(|(n, entry)| SlotInfo { n, entry }).collect(),
+                slots: store
+                    .slots()
+                    .into_iter()
+                    .map(|(n, entry)| SlotInfo { n, entry })
+                    .collect(),
             },
             Request::Get { id } => match store.get(*id)? {
                 Some(c) => Response::data(&c),
                 None => bail!("no entry with id {id}"),
             },
-            Request::GetSlot { n } => match store.slot(*n).map(|id| store.get(id)).transpose()?.flatten() {
+            Request::GetSlot { n } => match store
+                .slot(*n)
+                .map(|id| store.get(id))
+                .transpose()?
+                .flatten()
+            {
                 Some(c) => Response::data(&c),
                 None => bail!("slot {n} is empty"),
             },
@@ -88,7 +103,11 @@ pub fn handle_store(store: &mut Store, limits: &Limits, req: &Request) -> Option
                 store.wipe(*slots)?;
                 Response::Ok
             }
-            _ => return Ok(Response::Error { message: String::new() }),
+            _ => {
+                return Ok(Response::Error {
+                    message: String::new(),
+                })
+            }
         })
     })();
     match r {
@@ -105,8 +124,14 @@ impl Daemon {
 
     fn primary_mods(&self) -> Mods {
         match input::lock(&self.engine).config().primary {
-            Primary::Ctrl => Mods { ctrl: true, ..Mods::default() },
-            Primary::Meta => Mods { meta: true, ..Mods::default() },
+            Primary::Ctrl => Mods {
+                ctrl: true,
+                ..Mods::default()
+            },
+            Primary::Meta => Mods {
+                meta: true,
+                ..Mods::default()
+            },
         }
     }
 
@@ -120,7 +145,8 @@ impl Daemon {
         let hash = ev.content.hash();
         {
             let mut live = lock(&self.live);
-            live.suppress.retain(|(_, t)| t.elapsed() < Duration::from_secs(3));
+            live.suppress
+                .retain(|(_, t)| t.elapsed() < Duration::from_secs(3));
             if let Some(pos) = live.suppress.iter().position(|(h, _)| *h == hash) {
                 live.suppress.remove(pos);
                 return;
@@ -178,7 +204,11 @@ impl Daemon {
                 if left.is_zero() {
                     break;
                 }
-                live = me.live_cv.wait_timeout(live, left).map(|r| r.0).unwrap_or_else(|e| e.into_inner().0);
+                live = me
+                    .live_cv
+                    .wait_timeout(live, left)
+                    .map(|r| r.0)
+                    .unwrap_or_else(|e| e.into_inner().0);
             }
             drop(live);
             match me.save_slot_now(n) {
@@ -444,11 +474,13 @@ pub fn run() -> Result<()> {
     }
     {
         let d = d.clone();
-        std::thread::Builder::new().name("acts".into()).spawn(move || {
-            for a in act_rx {
-                d.on_act(a);
-            }
-        })?;
+        std::thread::Builder::new()
+            .name("acts".into())
+            .spawn(move || {
+                for a in act_rx {
+                    d.on_act(a);
+                }
+            })?;
     }
     d.watch_config();
 

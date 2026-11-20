@@ -88,13 +88,19 @@ impl App {
             if let Some(m) = &s.entry {
                 in_slot.push(m.id);
                 if hit(m) {
-                    rows.push(Row { meta: m.clone(), slot: Some(s.n) });
+                    rows.push(Row {
+                        meta: m.clone(),
+                        slot: Some(s.n),
+                    });
                 }
             }
         }
         for m in &self.entries {
             if !in_slot.contains(&m.id) && hit(m) {
-                rows.push(Row { meta: m.clone(), slot: None });
+                rows.push(Row {
+                    meta: m.clone(),
+                    slot: None,
+                });
             }
         }
         rows
@@ -119,9 +125,13 @@ impl App {
                 return None;
             };
             let bytes = ipc::decode(&data).ok()?;
-            let img = image::load_from_memory(&bytes).ok()?.thumbnail(160, 48).to_rgba8();
+            let img = image::load_from_memory(&bytes)
+                .ok()?
+                .thumbnail(160, 48)
+                .to_rgba8();
             let (w, h) = img.dimensions();
-            let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], img.as_raw());
+            let ci =
+                egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], img.as_raw());
             Some(ctx.load_texture(format!("thumb-{id}"), ci, egui::TextureOptions::LINEAR))
         })();
         self.thumbs.insert(id, tex.clone());
@@ -136,7 +146,10 @@ impl App {
         };
         match a {
             Action::PasteEntry(id) => {
-                let r = ipc::send(&Request::PasteEntry { id, delay_ms: PASTE_DELAY_MS });
+                let r = ipc::send(&Request::PasteEntry {
+                    id,
+                    delay_ms: PASTE_DELAY_MS,
+                });
                 if let Err(e) = r.and_then(|r| r.into_result()) {
                     self.status = Some(e.to_string());
                     return;
@@ -144,7 +157,10 @@ impl App {
                 close(ctx, self.return_to);
             }
             Action::PasteSlot(n) => {
-                let r = ipc::send(&Request::PasteSlot { n, delay_ms: PASTE_DELAY_MS });
+                let r = ipc::send(&Request::PasteSlot {
+                    n,
+                    delay_ms: PASTE_DELAY_MS,
+                });
                 if let Err(e) = r.and_then(|r| r.into_result()) {
                     self.status = Some(e.to_string());
                     return;
@@ -169,7 +185,17 @@ impl App {
     }
 
     fn keys(&mut self, ctx: &egui::Context, rows: &[Row]) -> Option<Action> {
-        let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+        let digits = [
+            Key::Num1,
+            Key::Num2,
+            Key::Num3,
+            Key::Num4,
+            Key::Num5,
+            Key::Num6,
+            Key::Num7,
+            Key::Num8,
+            Key::Num9,
+        ];
         ctx.input_mut(|i| {
             if i.consume_key(Modifiers::NONE, Key::Escape) {
                 return Some(Action::Close);
@@ -273,7 +299,10 @@ impl eframe::App for App {
                     if rows.is_empty() {
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {
-                            ui.label(RichText::new("Nothing here yet. Copy something.").color(self.c.muted));
+                            ui.label(
+                                RichText::new("Nothing here yet. Copy something.")
+                                    .color(self.c.muted),
+                            );
                         });
                     }
                     for (i, row) in rows.iter().enumerate() {
@@ -283,7 +312,11 @@ impl eframe::App for App {
                         } else {
                             Color32::TRANSPARENT
                         };
-                        let thumb = if row.meta.kind == Kind::Image { self.thumb(ctx, row.meta.id) } else { None };
+                        let thumb = if row.meta.kind == Kind::Image {
+                            self.thumb(ctx, row.meta.id)
+                        } else {
+                            None
+                        };
                         let inner = egui::Frame::none()
                             .fill(fill)
                             .rounding(self.radius * 0.6)
@@ -292,16 +325,30 @@ impl eframe::App for App {
                                 ui.set_width(ui.available_width());
                                 ui.horizontal(|ui| {
                                     let badge = match row.slot {
-                                        Some(n) => RichText::new(format!("{n}")).color(self.c.accent).strong(),
+                                        Some(n) => RichText::new(format!("{n}"))
+                                            .color(self.c.accent)
+                                            .strong(),
                                         None => RichText::new(" ").color(self.c.muted),
                                     };
-                                    ui.add_sized([self.font_size, self.font_size * 1.2], egui::Label::new(badge.monospace()));
+                                    ui.add_sized(
+                                        [self.font_size, self.font_size * 1.2],
+                                        egui::Label::new(badge.monospace()),
+                                    );
                                     if let Some(t) = &thumb {
                                         let s = t.size_vec2();
                                         ui.image((t.id(), s));
                                     }
-                                    let text_color = if selected { self.c.fg } else { self.c.fg.gamma_multiply(0.85) };
-                                    ui.add(egui::Label::new(RichText::new(&row.meta.preview).color(text_color)).truncate());
+                                    let text_color = if selected {
+                                        self.c.fg
+                                    } else {
+                                        self.c.fg.gamma_multiply(0.85)
+                                    };
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&row.meta.preview).color(text_color),
+                                        )
+                                        .truncate(),
+                                    );
                                 });
                             });
                         let resp = inner.response.interact(Sense::click());
@@ -319,10 +366,9 @@ impl eframe::App for App {
             self.scroll_to_selected = false;
 
             ui.add_space(4.0);
-            let hint = self
-                .status
-                .clone()
-                .unwrap_or_else(|| "Enter paste    Alt+digit pin to slot    Del delete    Esc close".into());
+            let hint = self.status.clone().unwrap_or_else(|| {
+                "Enter paste    Alt+digit pin to slot    Del delete    Esc close".into()
+            });
             ui.label(RichText::new(hint).color(self.c.muted).small());
         });
         if let Some(a) = action {

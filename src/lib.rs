@@ -10,7 +10,7 @@ pub mod input;
 pub mod ipc;
 pub mod logging;
 pub mod picker;
-pub mod system;
 pub mod store;
+pub mod system;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

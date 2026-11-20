@@ -148,9 +148,16 @@ impl Store {
     pub fn add(&mut self, c: &Content, limits: &Limits) -> Result<u64> {
         let hash = c.hash();
         let now = now_secs();
-        if let Some(pos) = self.index.entries.iter().position(|e| e.hash == hash && e.size == c.len()) {
+        if let Some(pos) = self
+            .index
+            .entries
+            .iter()
+            .position(|e| e.hash == hash && e.size == c.len())
+        {
             let id = self.index.entries[pos].id;
-            let same = fs::read(self.blob(id)).map(|b| b == c.bytes()).unwrap_or(false);
+            let same = fs::read(self.blob(id))
+                .map(|b| b == c.bytes())
+                .unwrap_or(false);
             if same {
                 let mut e = self.index.entries.remove(pos);
                 e.last_used = now;
@@ -301,7 +308,10 @@ mod tests {
         let p = std::env::temp_dir().join(format!(
             "hotbar-test-{}-{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir_all(&p).unwrap();
         p

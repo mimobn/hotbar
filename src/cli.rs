@@ -224,7 +224,11 @@ pub fn run() -> Result<()> {
             request(Request::Delete { id: read_id(id)? })?;
             Ok(())
         }
-        Cmd::Pick { dmenu, builtin, return_to } => {
+        Cmd::Pick {
+            dmenu,
+            builtin,
+            return_to,
+        } => {
             let cfg = Config::load().unwrap_or_default();
             let command = dmenu.unwrap_or(cfg.picker.command);
             if builtin || command.trim() == "builtin" {

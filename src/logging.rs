@@ -11,7 +11,9 @@ pub fn to_file() {
     let dir = crate::config::data_dir();
     std::fs::create_dir_all(&dir).ok();
     let path = dir.join("hotbar.log");
-    let too_big = std::fs::metadata(&path).map(|m| m.len() > 1 << 20).unwrap_or(false);
+    let too_big = std::fs::metadata(&path)
+        .map(|m| m.len() > 1 << 20)
+        .unwrap_or(false);
     let f = OpenOptions::new()
         .create(true)
         .append(!too_big)
