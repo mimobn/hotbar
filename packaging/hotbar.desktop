@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=hotbar
+Comment=Clipboard slots and history
+Exec=hotbar daemon
+Icon=edit-paste
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

@@ -1,0 +1,64 @@
+[package]
+name = "hotbar"
+version = "0.1.0"
+edition = "2021"
+description = "Numbered clipboard slots and clipboard history for Windows, Linux and macOS"
+license = "MIT"
+readme = "README.md"
+keywords = ["clipboard", "wayland", "hyprland", "productivity", "hotkeys"]
+categories = ["command-line-utilities"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hotbar"
+path = "src/main.rs"
+
+# Same program without a console window. Used for autostart and the picker on Windows.
+[[bin]]
+name = "hotbarw"
+path = "src/bin/hotbarw.rs"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+directories = "5"
+eframe = { version = "0.29", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+image = { version = "0.25", default-features = false, features = ["png", "bmp", "tiff"] }
+interprocess = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.12"
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+x11rb = { version = "0.13", features = ["xfixes"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSData", "NSArray"] }
+objc2-app-kit = { version = "0.3", features = ["NSPasteboard"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
